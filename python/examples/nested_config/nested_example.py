@@ -42,7 +42,7 @@ def main():
     config.server.allowed_origins.append("https://dev.example.com")
     
     # Add a new database connection
-    config.database.connections.append({
+    new_connection = konfigure.Config({
         "name": "analytics",
         "driver": "mysql",
         "host": "analytics.example.com",
@@ -52,6 +52,7 @@ def main():
             "password": "analytics123"
         }
     })
+    config.database.connections.append(new_connection)
     
     # Print the modified configuration
     print("\nModified allowed origins:")

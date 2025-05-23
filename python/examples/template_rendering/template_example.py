@@ -62,10 +62,11 @@ def main():
     templates.user_prompt_templates.greeting = "Hi {{ user_name }}! How may I assist you with {{ domain }} today?"
     
     # Add a new template
-    templates.response_templates.append({
+    new_template = konfigure.Config({
         "name": "bullet_list",
         "template": "{% for item in additional_info %}\n• {{ item }}\n{% endfor %}"
     })
+    templates.response_templates.append(new_template)
     
     # Render the modified template
     print("\nRendered modified greeting template:")
