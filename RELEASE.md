@@ -1,6 +1,26 @@
 # Release Process
 
-This project uses automatic versioning with setuptools-scm and tag-based releases.
+## 🚀 Quick Release Steps
+
+1. **Update version** in `python/pyproject.toml`:
+   ```toml
+   version = "0.1.8"  # Bump to desired version
+   ```
+
+2. **Commit and push**:
+   ```bash
+   git add python/pyproject.toml
+   git commit -m "Bump version to 0.1.8"
+   git push origin main
+   ```
+
+3. **Done!** 🎉 Publishing happens automatically.
+
+---
+
+## Legacy Process (No Longer Used)
+
+This project previously used automatic versioning with setuptools-scm and tag-based releases.
 
 ## How to Release
 
