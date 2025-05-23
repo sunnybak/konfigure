@@ -8,6 +8,8 @@ import copy
 import os
 import yaml
 import jinja2
+import threading
+import asyncio
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -158,10 +160,17 @@ class StringTemplate(str):
         if isinstance(other, StringTemplate):
             return self.raw_string == other.raw_string
         return self.raw_string == other
+        
+    def __hash__(self):
+        """Make StringTemplate hashable for use in sets and as dict keys."""
+        return hash(self.raw_string)
 
 
 class Config(dict):
-    """Enhanced dictionary with dot notation access and Jinja2 template rendering."""
+    """Enhanced dictionary with dot notation access and Jinja2 template rendering.
+    
+    Thread-safe for concurrent access across multiple threads or coroutines.
+    """
 
     def __init__(self, dict_value=None, yaml_path=None, parent=None, parent_key=None):
         """Initialize a Config object.
@@ -177,185 +186,284 @@ class Config(dict):
         self._yaml_path = yaml_path
         self._parent = parent
         self._parent_key = parent_key
+        
+        # Use the parent's lock if available, otherwise create a new one
+        if parent is not None and hasattr(parent, '_lock'):
+            self._lock = parent._lock
+            self._async_lock = parent._async_lock
+        else:
+            self._lock = threading.RLock()
+            self._async_lock = asyncio.Lock()
+            
         self._convert_to_config()
 
     def _convert_to_config(self):
         """Recursively convert nested dictionaries to Config objects."""
-        for key, value in list(dict.items(self)):  # Use dict.items directly to avoid attribute conflicts
-            self[key] = self._convert_value(value, key)
+        with self._lock:
+            for key, value in list(dict.items(self)):  # Use dict.items directly to avoid attribute conflicts
+                self[key] = self._convert_value(value, key)
 
     def _convert_value(self, value, key=None):
         """Recursively convert a value to its appropriate type."""
-        if isinstance(value, dict) and not isinstance(value, Config):
-            return Config(value, yaml_path=None, parent=self, parent_key=key)
-        elif isinstance(value, list):
-            converted_items = [self._convert_value(item) for item in value]
-            return SafeList(converted_items, parent_config=self)
-        elif value is None:
-            return None  # Keep None as None for proper identity comparisons
-        elif isinstance(value, (int, float, bool)):
-            return SafeAttributeAccess(value)
-        elif isinstance(value, str):
-            return StringTemplate(value)
-        elif isinstance(value, Config):
-            # Update parent reference if it's a Config
-            value._parent = self
-            value._parent_key = key
-            return value
-        else:
-            return SafeAttributeAccess(value)
+        with self._lock:
+            if isinstance(value, dict) and not isinstance(value, Config):
+                return Config(value, yaml_path=None, parent=self, parent_key=key)
+            elif isinstance(value, list):
+                converted_items = [self._convert_value(item) for item in value]
+                return SafeList(converted_items, parent_config=self)
+            elif value is None:
+                return None  # Keep None as None for proper identity comparisons
+            elif isinstance(value, (int, float, bool)):
+                return SafeAttributeAccess(value)
+            elif isinstance(value, str):
+                return StringTemplate(value)
+            elif isinstance(value, Config):
+                # Update parent reference if it's a Config
+                value._parent = self
+                value._parent_key = key
+                return value
+            else:
+                return SafeAttributeAccess(value)
 
     def __getattribute__(self, key):
         """Get an attribute from the Config using dot notation."""
-        # Allow access to special methods and private attributes
-        if key.startswith('_') or key.startswith('__'):
+        if key in ('_lock', '_async_lock', '_parent', '_yaml_path', '_parent_key') or key.startswith('__'):
             return super().__getattribute__(key)
-        
-        # Allow access to essential dict methods that shouldn't be overridden
-        if key in ('keys', 'values', 'get', 'pop', 'popitem', 'setdefault', 'update', 'clear', 'copy', 'items'):
-            # But first check if it's also a key in the dictionary
+            
+        with super().__getattribute__('_lock'):
+            # Allow access to special methods and private attributes
+            if key.startswith('_'):
+                return super().__getattribute__(key)
+            
+            # Allow access to essential dict methods that shouldn't be overridden
+            if key in ('keys', 'values', 'get', 'pop', 'popitem', 'setdefault', 'update', 'clear', 'copy', 'items'):
+                # But first check if it's also a key in the dictionary
+                try:
+                    if dict.__contains__(self, key):
+                        return dict.__getitem__(self, key)
+                except:
+                    pass
+                return super().__getattribute__(key)
+            
+            # For all other attributes, check if it's a key in the dictionary first
             try:
                 if dict.__contains__(self, key):
                     return dict.__getitem__(self, key)
             except:
                 pass
-            return super().__getattribute__(key)
-        
-        # For all other attributes, check if it's a key in the dictionary first
-        try:
-            if dict.__contains__(self, key):
-                return dict.__getitem__(self, key)
-        except:
-            pass
-        
-        # If not found as a dictionary key, try normal attribute access
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            return None
+            
+            # If not found as a dictionary key, try normal attribute access
+            try:
+                return super().__getattribute__(key)
+            except AttributeError:
+                return None
 
     def _process_value(self, value, key=None):
         """Process a value to ensure it's in the correct format for Config storage."""
-        if isinstance(value, dict) and not isinstance(value, Config):
-            return Config(value, yaml_path=None, parent=self, parent_key=key)
-        elif isinstance(value, list) and not isinstance(value, SafeList):
-            processed_items = [self._process_value(item) for item in value]
-            return SafeList(processed_items, parent_config=self)
-        elif isinstance(value, str) and not isinstance(value, StringTemplate):
-            return StringTemplate(value)
-        elif isinstance(value, (int, float)) and key is not None and key in self and isinstance(self[key], StringTemplate):
-            return StringTemplate(str(value))
-        elif value is None:
-            return None  # Keep None as None
-        elif isinstance(value, (int, float, bool)) and not isinstance(value, SafeAttributeAccess):
-            return SafeAttributeAccess(value)
-        return value
+        with self._lock:
+            if isinstance(value, dict) and not isinstance(value, Config):
+                return Config(value, yaml_path=None, parent=self, parent_key=key)
+            elif isinstance(value, list) and not isinstance(value, SafeList):
+                processed_items = [self._process_value(item) for item in value]
+                return SafeList(processed_items, parent_config=self)
+            elif isinstance(value, str) and not isinstance(value, StringTemplate):
+                return StringTemplate(value)
+            elif isinstance(value, (int, float)) and key is not None and key in self and isinstance(self[key], StringTemplate):
+                return StringTemplate(str(value))
+            elif value is None:
+                return None  # Keep None as None
+            elif isinstance(value, (int, float, bool)) and not isinstance(value, SafeAttributeAccess):
+                return SafeAttributeAccess(value)
+            return value
 
     def __setitem__(self, key, value):
         """Set an item in the Config."""
-        if key in ('_yaml_path', '_parent', '_parent_key'):
+        if key in ('_yaml_path', '_parent', '_parent_key', '_lock', '_async_lock'):
             super().__setitem__(key, value)
             return
-        processed_value = self._process_value(value, key)
-        super().__setitem__(key, processed_value)
+        with self._lock:
+            processed_value = self._process_value(value, key)
+            super().__setitem__(key, processed_value)
 
     def __setattr__(self, key, value):
         """Set an attribute in the Config using dot notation."""
-        if key in ('_yaml_path', '_parent', '_parent_key'):
+        if key in ('_yaml_path', '_parent', '_parent_key', '_lock', '_async_lock'):
             super().__setattr__(key, value)
             return
-        if key.startswith('__') and key.endswith('__'):
-            super().__setattr__(key, value)
-        else:
-            self[key] = value
+        with self._lock:
+            if key.startswith('__') and key.endswith('__'):
+                super().__setattr__(key, value)
+            else:
+                self[key] = value
 
     def __delattr__(self, key):
         """Delete an attribute from the Config."""
-        if key.startswith('__') and key.endswith('__'):
+        if key in ('_lock', '_async_lock', '_parent', '_yaml_path', '_parent_key'):
             super().__delattr__(key)
-        else:
-            try:
-                del self[key]
-            except KeyError:
-                # Silently ignore if the key doesn't exist
-                pass
+            return
+        with self._lock:
+            if key.startswith('__') and key.endswith('__'):
+                super().__delattr__(key)
+            else:
+                try:
+                    del self[key]
+                except KeyError:
+                    # Silently ignore if the key doesn't exist
+                    pass
 
     def __deepcopy__(self, memo):
         """Create a deep copy of the Config."""
-        return Config(copy.deepcopy(dict(self), memo))
+        with self._lock:
+            return Config(copy.deepcopy(dict(self), memo))
     
     def _to_serializable(self):
         """Convert the Config to a serializable dictionary."""
-        def _serialize(v):
-            if isinstance(v, Config):
-                return v._to_serializable()
-            elif isinstance(v, StringTemplate):
-                return v.raw_string
-            elif isinstance(v, SafeAttributeAccess):
-                return v._wrapped_object
-            elif isinstance(v, (list, SafeList)):
-                return [_serialize(item) for item in v]
-            elif isinstance(v, dict):
-                return {k: _serialize(val) for k, val in v.items()}
-            elif isinstance(v, (str, int, float, bool, type(None))):
-                return v
-            else:
-                return str(v)
-        
-        # Create a new dictionary with converted values
-        result = {}
-        
-        # Process each key-value pair in the Config
-        for k, v in list(dict.items(self)):
-            if k.startswith('_'):
-                continue
-            # Convert all other values to serializable format
-            result[k] = _serialize(v)
+        with self._lock:
+            def _serialize(v):
+                if isinstance(v, Config):
+                    return v._to_serializable()
+                elif isinstance(v, StringTemplate):
+                    return v.raw_string
+                elif isinstance(v, SafeAttributeAccess):
+                    return v._wrapped_object
+                elif isinstance(v, (list, SafeList)):
+                    return [_serialize(item) for item in v]
+                elif isinstance(v, dict):
+                    return {k: _serialize(val) for k, val in v.items()}
+                elif isinstance(v, (str, int, float, bool, type(None))):
+                    return v
+                else:
+                    return str(v)
             
-        return result
+            # Create a new dictionary with converted values
+            result = {}
+            
+            # Process each key-value pair in the Config
+            for k, v in list(dict.items(self)):
+                if k.startswith('_'):
+                    continue
+                # Convert all other values to serializable format
+                result[k] = _serialize(v)
+                
+            return result
+            
+    async def async_get(self, key, default=None):
+        """Async version of get() for use in coroutines."""
+        async with self._async_lock:
+            return self.get(key, default)
+    
+    async def async_set(self, key, value):
+        """Async version of __setitem__ for use in coroutines."""
+        async with self._async_lock:
+            self[key] = value
+    
+    async def async_del(self, key):
+        """Async version of __delitem__ for use in coroutines."""
+        async with self._async_lock:
+            try:
+                del self[key]
+            except KeyError:
+                pass
+    
+    async def async_update(self, other=None, **kwargs):
+        """Async version of update() for use in coroutines."""
+        async with self._async_lock:
+            if other:
+                if hasattr(other, 'keys'):
+                    for key in other.keys():
+                        self[key] = other[key]
+                else:
+                    for key, value in other:
+                        self[key] = value
+            if kwargs:
+                for key, value in kwargs.items():
+                    self[key] = value
+    
+    async def async_contains(self, key):
+        """Async version of __contains__ for use in coroutines."""
+        async with self._async_lock:
+            return key in self
+    
+    async def async_to_serializable(self):
+        """Async version of _to_serializable for use in coroutines."""
+        async with self._async_lock:
+            return self._to_serializable()
 
 
 class SafeList(list):
-    """A list that wraps assigned primitive values with SafeAttributeAccess."""
+    """A list that wraps assigned primitive values with SafeAttributeAccess.
+    
+    Thread-safe for concurrent access across multiple threads or coroutines.
+    """
     
     def __init__(self, items=None, parent_config=None):
         items = items or []
         self._parent_config = parent_config
+        # Use the parent's lock if available, otherwise create a new one
+        if parent_config is not None and hasattr(parent_config, '_lock'):
+            self._lock = parent_config._lock
+            self._async_lock = parent_config._async_lock
+        else:
+            self._lock = threading.RLock()
+            self._async_lock = asyncio.Lock()
         super().__init__(items)
     
     def __setitem__(self, index, value):
         """Wrap primitive values with SafeAttributeAccess when assigning to list."""
-        processed_value = self._process_value(value)
-        super().__setitem__(index, processed_value)
+        with self._lock:
+            processed_value = self._process_value(value)
+            super().__setitem__(index, processed_value)
     
     def append(self, value):
         """Wrap primitive values with SafeAttributeAccess when appending to list."""
-        processed_value = self._process_value(value)
-        super().append(processed_value)
+        with self._lock:
+            processed_value = self._process_value(value)
+            super().append(processed_value)
     
     def insert(self, index, value):
         """Wrap primitive values with SafeAttributeAccess when inserting into list."""
-        processed_value = self._process_value(value)
-        super().insert(index, processed_value)
+        with self._lock:
+            processed_value = self._process_value(value)
+            super().insert(index, processed_value)
     
     def extend(self, values):
         """Wrap primitive values with SafeAttributeAccess when extending list."""
-        processed_values = [self._process_value(value) for value in values]
-        super().extend(processed_values)
+        with self._lock:
+            processed_values = [self._process_value(value) for value in values]
+            super().extend(processed_values)
     
     def _process_value(self, value):
         """Process a value to ensure it's properly wrapped."""
-        if isinstance(value, dict) and not isinstance(value, Config):
-            return Config(value, yaml_path=None, parent=self._parent_config)
-        elif isinstance(value, list) and not isinstance(value, SafeList):
-            return SafeList(value, parent_config=self._parent_config)
-        elif isinstance(value, str) and not isinstance(value, StringTemplate):
-            return StringTemplate(value)
-        elif value is None:
-            return None  # Keep None as None
-        elif isinstance(value, (int, float, bool)) and not isinstance(value, SafeAttributeAccess):
-            return SafeAttributeAccess(value)
-        return value
+        with self._lock:
+            if isinstance(value, dict) and not isinstance(value, Config):
+                return Config(value, yaml_path=None, parent=self._parent_config)
+            elif isinstance(value, list) and not isinstance(value, SafeList):
+                return SafeList(value, parent_config=self._parent_config)
+            elif isinstance(value, str) and not isinstance(value, StringTemplate):
+                return StringTemplate(value)
+            elif value is None:
+                return None  # Keep None as None
+            elif isinstance(value, (int, float, bool)) and not isinstance(value, SafeAttributeAccess):
+                return SafeAttributeAccess(value)
+            return value
+            
+    async def async_append(self, value):
+        """Async version of append for use in coroutines."""
+        async with self._async_lock:
+            processed_value = self._process_value(value)
+            super().append(processed_value)
+    
+    async def async_extend(self, values):
+        """Async version of extend for use in coroutines."""
+        async with self._async_lock:
+            processed_values = [self._process_value(value) for value in values]
+            super().extend(processed_values)
+            
+    async def async_insert(self, index, value):
+        """Async version of insert for use in coroutines."""
+        async with self._async_lock:
+            processed_value = self._process_value(value)
+            super().insert(index, processed_value)
 
 
 def load(file_path) -> Config:
