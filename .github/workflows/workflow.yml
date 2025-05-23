@@ -44,7 +44,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Required for setuptools-scm
+        fetch-depth: 0  # Required for setuptools-scm to see all tags
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -56,6 +56,14 @@ jobs:
         cd python
         python -m pip install --upgrade pip
         pip install build setuptools-scm
+    
+    - name: Debug version
+      run: |
+        cd python
+        echo "Current git describe:"
+        git describe --tags --long --dirty
+        echo "setuptools-scm version:"
+        python -m setuptools_scm
     
     - name: Build package
       run: |
