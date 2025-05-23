@@ -1,0 +1,24 @@
+# Templates for LLM prompts
+system_prompt: |
+  You are a helpful assistant named {{ assistant_name }}.
+  Your primary goal is to assist users with {{ domain }} related questions.
+  
+  Current date: {{ current_date }}
+  
+user_prompt_templates:
+  greeting: "Hello {{ user_name }}, how can I help you today?"
+  summary: "Here's a summary of {{ topic }} based on the information provided:"
+  error: "I'm sorry {{ user_name }}, I couldn't process your request because {{ error_reason }}."
+
+response_templates:
+  - name: detailed_answer
+    template: |
+      Based on {{ source }}, I can tell you that {{ answer }}.
+      
+      Additional information:
+      {% for item in additional_info %}
+      - {{ item }}
+      {% endfor %}
+  
+  - name: short_answer
+    template: "{{ answer }}"
