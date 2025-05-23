@@ -20,8 +20,39 @@ class StringTemplate(str):
     
     def render(self, **kwargs):
         """Render the string as a Jinja template."""
-        template = jinja2.Template(self.raw_string)
-        return template.render(**kwargs)
+        env = jinja2.Environment(
+            trim_blocks=True,
+            lstrip_blocks=True,
+            keep_trailing_newline=True
+        )
+        
+        # Create a custom filter to render nested templates
+        def render_template(template_str, **ctx):
+            template = env.from_string(template_str)
+            return template.render(**ctx)
+        
+        env.filters['render_template'] = render_template
+        
+        # Add the template itself to the context
+        context = kwargs.copy()
+        
+        # Create the template
+        template = env.from_string(self.raw_string)
+        
+        # First pass: render any direct variables
+        result = template.render(**context)
+        
+        # Second pass: render any templates in the result
+        if '{{' in result:
+            template = env.from_string(result)
+            result = template.render(**context)
+            
+            # Third pass for deeply nested templates
+            if '{{' in result:
+                template = env.from_string(result)
+                result = template.render(**context)
+        
+        return result
     
     def __str__(self):
         return self.raw_string
@@ -89,12 +120,14 @@ class Config(dict):
 
     def _process_value(self, value, key=None):
         """Process a value to ensure it's in the correct format for Config storage."""
-        if isinstance(value, str) and not isinstance(value, StringTemplate):
-            return StringTemplate(value)
-        elif isinstance(value, dict) and not isinstance(value, Config):
+        if isinstance(value, dict) and not isinstance(value, Config):
             return Config(value, yaml_path=None, parent=self, parent_key=key)
         elif isinstance(value, list):
             return [self._process_value(item) for item in value]
+        elif isinstance(value, str) and not isinstance(value, StringTemplate):
+            return StringTemplate(value)
+        elif isinstance(value, (int, float)) and key is not None and key in self and isinstance(self[key], StringTemplate):
+            return StringTemplate(str(value))
         return value
 
     def __setitem__(self, key, value):
@@ -129,6 +162,15 @@ class Config(dict):
     def __deepcopy__(self, memo):
         """Create a deep copy of the Config."""
         return Config(copy.deepcopy(dict(self), memo))
+    
+    
+    def append(self, item):
+        """Append an item to a list-like Config object."""
+        # Convert the item to a Config object if it's a dict
+        if isinstance(item, dict):
+            item = Config(item, parent=self)
+        # Use the list append method directly
+        list.append(self, item)
 
     def _to_serializable(self):
         """Convert the Config to a serializable dictionary."""

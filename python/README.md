@@ -9,7 +9,7 @@ A YAML-based configuration management tool for separating code from prompts in L
 pip install konfigure
 
 # Install from source
-pip install git+https://github.com/sunnybak/confiture.git#subdirectory=python
+pip install git+https://github.com/sunnybak/konfigure.git#subdirectory=python
 ```
 
 ## Usage
@@ -48,8 +48,8 @@ konfigure.dump(config, 'config.yaml')
 
 ```bash
 # Clone the repository
-git clone https://github.com/sunnybak/confiture.git
-cd confiture/python
+git clone https://github.com/sunnybak/konfigure.git
+cd konfigure/python
 
 # Install in development mode
 pip install -e .
@@ -65,10 +65,10 @@ pip install -e ".[dev]"
 pytest
 
 # Run tests with coverage
-pytest --cov=confiture
+pytest --cov=konfigure
 
 # Run a specific test file
-pytest confiture/tests/test_core.py
+pytest konfigure/tests/test_core.py
 ```
 
 ### Building the Package
@@ -78,7 +78,7 @@ pytest confiture/tests/test_core.py
 python -m build
 
 # Install the built package
-pip install dist/confiture-0.1.0-py3-none-any.whl
+pip install dist/konfigure-0.1.0-py3-none-any.whl
 ```
 
 ## License
