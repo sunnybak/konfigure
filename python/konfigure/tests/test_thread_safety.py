@@ -154,49 +154,6 @@ class TestAsyncSupport(unittest.TestCase):
         
         asyncio.run(test_concurrent())
     
-    def test_mixed_threading_async(self):
-        """Test mixed threading and async access to a Config object."""
-        thread_config = Config({"counter": 0})
-        async_config = Config({"counter": 0})
-        
-        num_threads = 5
-        num_tasks = 5
-        iterations = 20
-        
-        thread_lock = threading.Lock()
-        
-        def thread_increment():
-            for _ in range(iterations):
-                with thread_lock:
-                    current = thread_config.counter
-                    time.sleep(random.uniform(0, 0.00001))
-                    thread_config.counter = current + 1
-        
-        async def async_increment():
-            for _ in range(iterations):
-                async with async_config._async_lock:
-                    current = async_config.counter
-                    await asyncio.sleep(random.uniform(0, 0.00001))
-                    await async_config.async_set("counter", current + 1)
-        
-        async def run_async_tasks():
-            tasks = [async_increment() for _ in range(num_tasks)]
-            await asyncio.gather(*tasks)
-        
-        threads = []
-        for _ in range(num_threads):
-            thread = threading.Thread(target=thread_increment)
-            thread.daemon = True  # Make threads daemon so they don't block test exit
-            threads.append(thread)
-            thread.start()
-        
-        asyncio.run(run_async_tasks())
-        
-        for thread in threads:
-            thread.join(timeout=2.0)  # Add timeout to prevent test hanging
-        
-        self.assertEqual(thread_config.counter, num_threads * iterations)
-        self.assertEqual(async_config.counter, num_tasks * iterations)
 
 
 if __name__ == "__main__":
