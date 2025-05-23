@@ -1,0 +1,9 @@
+# Basic configuration example
+app_name: My Application
+version: 1.0.0
+debug: true
+port: 8080
+database:
+  host: localhost
+  port: 5432
+  username: admin

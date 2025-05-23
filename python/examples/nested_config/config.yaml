@@ -1,0 +1,30 @@
+# Nested configuration with lists
+server:
+  host: 0.0.0.0
+  port: 8000
+  ssl: true
+  allowed_origins:
+    - https://example.com
+    - https://api.example.com
+database:
+  connections:
+    - name: main
+      driver: postgres
+      host: localhost
+      port: 5432
+      credentials:
+        username: admin
+        password: secret
+    - name: readonly
+      driver: postgres
+      host: readonly.example.com
+      port: 5432
+      credentials:
+        username: reader
+        password: readonly
+logging:
+  level: info
+  file: /var/log/app.log
+  rotation:
+    max_size: 10MB
+    backup_count: 5
