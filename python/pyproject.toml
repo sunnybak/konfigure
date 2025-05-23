@@ -22,6 +22,7 @@ dev = [
 ]
 
 [tool.setuptools_scm]
+root = ".."
 write_to = "konfigure/_version.py"
 
 [tool.black]
