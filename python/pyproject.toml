@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools-scm[toml]>=6.2"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "konfigure"
-dynamic = ["version"]
+version = "0.1.7"
 description = "A YAML-based configuration management tool for separating code from prompts in LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,11 +20,6 @@ dev = [
     "black>=23.0.0",
     "isort>=5.0.0",
 ]
-
-[tool.setuptools_scm]
-root = ".."
-write_to = "konfigure/_version.py"
-fallback_version = "0.0.0"
 
 [tool.black]
 line-length = 100

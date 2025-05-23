@@ -3,7 +3,6 @@ name: Build and Publish to PyPI
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
@@ -16,8 +15,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Required for setuptools-scm
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -28,7 +25,7 @@ jobs:
       run: |
         cd python
         python -m pip install --upgrade pip
-        pip install build pytest setuptools-scm
+        pip install build pytest
         pip install -e .[dev]
     
     - name: Run tests
@@ -39,12 +36,10 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Required for setuptools-scm to see all tags
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -54,31 +49,15 @@ jobs:
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build setuptools-scm
-    
-    - name: Debug version
-      run: |
-        echo "Current git describe:"
-        git describe --tags --long --dirty
-        echo "setuptools-scm version from repo root:"
-        cd python && python -m setuptools_scm
+        pip install build
     
     - name: Build package
       run: |
-        echo "=== Pre-build debug ==="
-        echo "Current directory: $(pwd)"
-        echo "Git describe: $(git describe --tags --long --dirty)"
         cd python
-        echo "setuptools-scm version: $(python -m setuptools_scm)"
-        echo "Ensuring version file exists..."
-        python -c "import setuptools_scm; print(f'Version: {setuptools_scm.get_version(root=\"..\")}')"
-        echo "========================"
-        # Build the package
+        echo "Building package..."
         python -m build
-        echo "=== Post-build debug ==="
         echo "Built files:"
         ls -la dist/
-        echo "========================"
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -89,7 +68,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: konfigure-release
     permissions:
       id-token: write  # Required for PyPI trusted publishing
