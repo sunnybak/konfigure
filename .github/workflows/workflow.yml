@@ -53,22 +53,28 @@ jobs:
     
     - name: Install build dependencies
       run: |
-        cd python
         python -m pip install --upgrade pip
         pip install build setuptools-scm
     
     - name: Debug version
       run: |
-        cd python
         echo "Current git describe:"
         git describe --tags --long --dirty
-        echo "setuptools-scm version:"
-        python -m setuptools_scm
+        echo "setuptools-scm version from repo root:"
+        cd python && python -m setuptools_scm
     
     - name: Build package
       run: |
-        cd python
-        python -m build
+        echo "=== Pre-build debug ==="
+        echo "Current directory: $(pwd)"
+        echo "Git describe: $(git describe --tags --long --dirty)"
+        echo "setuptools-scm version: $(cd python && python -m setuptools_scm)"
+        echo "========================"
+        cd python && python -m build
+        echo "=== Post-build debug ==="
+        echo "Built files:"
+        ls -la python/dist/
+        echo "========================"
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
