@@ -1,5 +1,5 @@
 """
-Tests for the confiture package.
+Tests for the konfigure package.
 """
 
 import os
@@ -7,8 +7,8 @@ import tempfile
 import unittest
 import yaml
 
-from confiture import load, dump, Config
-from confiture.core import StringTemplate
+from konfigure import load, dump, Config
+from konfigure.core import StringTemplate
 
 
 class TestStringTemplate(unittest.TestCase):

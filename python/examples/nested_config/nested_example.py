@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Nested configuration example for confiture.
+Nested configuration example for konfigure.
 
 This example demonstrates working with deeply nested configurations and lists.
 """
@@ -9,10 +9,10 @@ import os
 import sys
 from pathlib import Path
 
-# Add the parent directory to the path so we can import confiture
+# Add the parent directory to the path so we can import konfigure
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import confiture
+import konfigure
 
 def main():
     # Get the path to the config file
@@ -21,7 +21,7 @@ def main():
     print(f"Loading configuration from {config_path}")
     
     # Load the configuration
-    config = confiture.load(config_path)
+    config = konfigure.load(config_path)
     
     # Access nested values
     print(f"Server host: {config.server.host}")
@@ -42,7 +42,7 @@ def main():
     config.server.allowed_origins.append("https://dev.example.com")
     
     # Add a new database connection
-    config.database.connections.append({
+    new_connection = konfigure.Config({
         "name": "analytics",
         "driver": "mysql",
         "host": "analytics.example.com",
@@ -52,6 +52,7 @@ def main():
             "password": "analytics123"
         }
     })
+    config.database.connections.append(new_connection)
     
     # Print the modified configuration
     print("\nModified allowed origins:")
@@ -67,7 +68,7 @@ def main():
     
     # Save the changes to a new file
     new_config_path = os.path.join(os.path.dirname(__file__), "modified_config.yaml")
-    confiture.dump(config, new_config_path)
+    konfigure.dump(config, new_config_path)
     print(f"\nSaved modified configuration to {new_config_path}")
 
 if __name__ == "__main__":

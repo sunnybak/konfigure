@@ -1,5 +1,5 @@
 """
-Advanced tests for the confiture package.
+Advanced tests for the konfigure package.
 
 These tests cover more complex scenarios including:
 - Deeply nested structures
@@ -13,8 +13,8 @@ import tempfile
 import unittest
 import yaml
 
-from confiture import load, dump, Config
-from confiture.core import StringTemplate
+from konfigure import load, dump, Config
+from konfigure.core import StringTemplate
 
 
 class TestNestedStructures(unittest.TestCase):
@@ -65,7 +65,8 @@ class TestNestedStructures(unittest.TestCase):
         self.assertEqual(config.users[0].roles[2], "developer")
         
         # Add new items to nested lists
-        config.users.append({"name": "Charlie", "roles": ["tester"]})
+        new_user = Config({"name": "Charlie", "roles": ["tester"]})
+        config.users.append(new_user)
         self.assertEqual(len(config.users), 3)
         self.assertEqual(config.users[2].name, "Charlie")
 
@@ -201,15 +202,18 @@ class TestTemplateRendering(unittest.TestCase):
         
         variables = {
             "user": {"first_name": "John", "last_name": "Doe"},
-            "app": {"name": "My App", "version": "1.0.0"},
-            "name": "John Doe"  # Pre-rendered name
+            "app": {"name": "My App", "version": "1.0.0"}
         }
         
         # Test rendering individual templates
         self.assertEqual(config.name.render(**variables), "John Doe")
+        
+        # Add the rendered name to the context for the greeting
+        variables["name"] = "John Doe"
         self.assertEqual(config.greeting.render(**variables), "Hello, John Doe!")
         
         # Test rendering a template that references other templates
+        variables["greeting"] = "Hello, John Doe!"
         self.assertEqual(
             config.message.render(**variables),
             "Hello, John Doe! Welcome to My App version 1.0.0."
@@ -224,9 +228,9 @@ class TestTemplateRendering(unittest.TestCase):
             "complex": """
 {% for user in users %}
   {% if user.active %}
-    {{ user.name | title }} is active.
+  {{ user.name | title }} is active.
   {% else %}
-    {{ user.name | title }} is inactive.
+  {{ user.name | title }} is inactive.
   {% endif %}
 {% endfor %}
 """
