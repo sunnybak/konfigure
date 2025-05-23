@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Basic usage example for confiture.
+Basic usage example for konfigure.
 
 This example demonstrates loading a YAML file, accessing values with dot notation,
 modifying values, and saving the changes back to the file.
@@ -10,10 +10,10 @@ import os
 import sys
 from pathlib import Path
 
-# Add the parent directory to the path so we can import confiture
+# Add the parent directory to the path so we can import konfigure
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import confiture
+import konfigure
 
 def main():
     # Get the path to the config file
@@ -22,7 +22,7 @@ def main():
     print(f"Loading configuration from {config_path}")
     
     # Load the configuration
-    config = confiture.load(config_path)
+    config = konfigure.load(config_path)
     
     # Access values using dot notation
     print(f"App name: {config.app_name}")
@@ -48,7 +48,7 @@ def main():
     
     # Save the changes to a new file
     new_config_path = os.path.join(os.path.dirname(__file__), "modified_config.yaml")
-    confiture.dump(config, new_config_path)
+    konfigure.dump(config, new_config_path)
     print(f"\nSaved modified configuration to {new_config_path}")
 
 if __name__ == "__main__":

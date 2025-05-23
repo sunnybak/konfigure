@@ -1,5 +1,5 @@
 """
-Core functionality for the confiture package.
+Core functionality for the konfigure package.
 
 This module provides the main classes and functions for working with YAML configuration files.
 """

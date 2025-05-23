@@ -1,4 +1,4 @@
-# Confiture
+# Konfigure
 
 A YAML-based configuration management tool for separating code from prompts in LLMs.
 
@@ -6,7 +6,7 @@ A YAML-based configuration management tool for separating code from prompts in L
 
 ```bash
 # Install from PyPI
-pip install confiture
+pip install konfigure
 
 # Install from source
 pip install git+https://github.com/sunnybak/confiture.git#subdirectory=python
@@ -15,10 +15,10 @@ pip install git+https://github.com/sunnybak/confiture.git#subdirectory=python
 ## Usage
 
 ```python
-import confiture
+import konfigure
 
 # Load a YAML file
-config = confiture.load('config.yaml')
+config = konfigure.load('config.yaml')
 
 # Access values using dot notation
 print(config.a.b)  # Prints the value of b in the a section
@@ -31,7 +31,7 @@ config.new_section = {'key': 'value'}
 template_value = config.a.b.render(variable='value')
 
 # Save changes back to the file
-confiture.dump(config, 'config.yaml')
+konfigure.dump(config, 'config.yaml')
 ```
 
 ## Features

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Template rendering example for confiture.
+Template rendering example for konfigure.
 
 This example demonstrates loading templates from YAML and rendering them with variables.
 """
@@ -10,10 +10,10 @@ import sys
 import datetime
 from pathlib import Path
 
-# Add the parent directory to the path so we can import confiture
+# Add the parent directory to the path so we can import konfigure
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import confiture
+import konfigure
 
 def main():
     # Get the path to the templates file
@@ -22,7 +22,7 @@ def main():
     print(f"Loading templates from {templates_path}")
     
     # Load the templates
-    templates = confiture.load(templates_path)
+    templates = konfigure.load(templates_path)
     
     # Prepare variables for rendering
     variables = {
@@ -77,7 +77,7 @@ def main():
     
     # Save the changes to a new file
     new_templates_path = os.path.join(os.path.dirname(__file__), "modified_templates.yaml")
-    confiture.dump(templates, new_templates_path)
+    konfigure.dump(templates, new_templates_path)
     print(f"\nSaved modified templates to {new_templates_path}")
 
 if __name__ == "__main__":

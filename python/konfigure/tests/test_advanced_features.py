@@ -1,5 +1,5 @@
 """
-Advanced tests for the confiture package.
+Advanced tests for the konfigure package.
 
 These tests cover more complex scenarios including:
 - Deeply nested structures
@@ -13,8 +13,8 @@ import tempfile
 import unittest
 import yaml
 
-from confiture import load, dump, Config
-from confiture.core import StringTemplate
+from konfigure import load, dump, Config
+from konfigure.core import StringTemplate
 
 
 class TestNestedStructures(unittest.TestCase):
