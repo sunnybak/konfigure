@@ -16,6 +16,12 @@
 
 3. **Done!** 🎉 Publishing happens automatically.
 
+## 🧠 Smart Publishing
+
+- **Tests run** on every push/PR
+- **Build & publish** only happen when the version number actually changes
+- **No failed publishes** when you push other changes (docs, code fixes, etc.)
+
 ---
 
 ## Legacy Process (No Longer Used)

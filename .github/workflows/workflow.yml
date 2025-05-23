@@ -33,10 +33,42 @@ jobs:
         cd python
         python -m pytest
 
-  build:
-    needs: test
+  check-version:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      version-changed: ${{ steps.check.outputs.changed }}
+      current-version: ${{ steps.check.outputs.version }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # Need at least 2 commits to compare
+    
+    - name: Check if version changed
+      id: check
+      run: |
+        # Get current version
+        CURRENT_VERSION=$(grep '^version = ' python/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        
+        # Check if version line changed in this commit
+        if git diff HEAD~1 HEAD --name-only | grep -q "python/pyproject.toml"; then
+          if git diff HEAD~1 HEAD python/pyproject.toml | grep -q '^[+-]version = '; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Version changed to $CURRENT_VERSION"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  pyproject.toml changed but version stayed the same"
+          fi
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "ℹ️  pyproject.toml not modified in this commit"
+        fi
+
+  build:
+    needs: [test, check-version]
+    runs-on: ubuntu-latest
+    if: needs.check-version.outputs.version-changed == 'true'
     
     steps:
     - uses: actions/checkout@v4
@@ -54,7 +86,7 @@ jobs:
     - name: Build package
       run: |
         cd python
-        echo "Building package..."
+        echo "Building package version ${{ needs.check-version.outputs.current-version }}..."
         python -m build
         echo "Built files:"
         ls -la dist/
@@ -66,9 +98,9 @@ jobs:
         path: python/dist/*
 
   publish:
-    needs: build
+    needs: [build, check-version]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: needs.check-version.outputs.version-changed == 'true'
     environment: konfigure-release
     permissions:
       id-token: write  # Required for PyPI trusted publishing
