@@ -68,12 +68,16 @@ jobs:
         echo "=== Pre-build debug ==="
         echo "Current directory: $(pwd)"
         echo "Git describe: $(git describe --tags --long --dirty)"
-        echo "setuptools-scm version: $(cd python && python -m setuptools_scm)"
+        cd python
+        echo "setuptools-scm version: $(python -m setuptools_scm)"
+        echo "Ensuring version file exists..."
+        python -c "import setuptools_scm; print(f'Version: {setuptools_scm.get_version(root=\"..\")}')"
         echo "========================"
-        cd python && python -m build
+        # Build the package
+        python -m build
         echo "=== Post-build debug ==="
         echo "Built files:"
-        ls -la python/dist/
+        ls -la dist/
         echo "========================"
     
     - name: Upload build artifacts
