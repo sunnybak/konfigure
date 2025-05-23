@@ -11,12 +11,106 @@ import jinja2
 from typing import Any, Dict, List, Optional, Union
 
 
+class NoneWrapper:
+    """A wrapper for None that returns None for any attribute access instead of raising AttributeError."""
+    
+    def __getattr__(self, name):
+        """Return None for any attribute access."""
+        return None
+    
+    def __eq__(self, other):
+        return other is None
+    
+    def __ne__(self, other):
+        return other is not None
+    
+    def __bool__(self):
+        return False
+    
+    def __str__(self):
+        return "None"
+    
+    def __repr__(self):
+        return "None"
+    
+    def __is__(self, other):
+        return other is None
+
+
+class SafeAttributeAccess:
+    """A wrapper that makes any object return None for missing attributes instead of raising AttributeError."""
+    
+    def __init__(self, wrapped_object):
+        object.__setattr__(self, '_wrapped_object', wrapped_object)
+    
+    def __getattr__(self, name):
+        """Return None for any missing attribute instead of raising AttributeError."""
+        try:
+            return getattr(self._wrapped_object, name)
+        except AttributeError:
+            return None
+    
+    def __setattr__(self, name, value):
+        if name == '_wrapped_object':
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._wrapped_object, name, value)
+    
+    def __getitem__(self, key):
+        return self._wrapped_object[key]
+    
+    def __setitem__(self, key, value):
+        self._wrapped_object[key] = value
+    
+    def __str__(self):
+        return str(self._wrapped_object)
+    
+    def __repr__(self):
+        return repr(self._wrapped_object)
+    
+    def __eq__(self, other):
+        if isinstance(other, SafeAttributeAccess):
+            return self._wrapped_object == other._wrapped_object
+        return self._wrapped_object == other
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+    def __len__(self):
+        return len(self._wrapped_object)
+    
+    def __iter__(self):
+        return iter(self._wrapped_object)
+    
+    def __bool__(self):
+        return bool(self._wrapped_object)
+    
+    def __add__(self, other):
+        return self._wrapped_object + other
+    
+    def __radd__(self, other):
+        return other + self._wrapped_object
+    
+    def __is__(self, other):
+        # For None comparisons specifically
+        if other is None:
+            return self._wrapped_object is None
+        return self is other
+    
+    def __hash__(self):
+        return hash(self._wrapped_object)
+
+
 class StringTemplate(str):
     """A string class that can be parsed as a Jinja template."""
     
     def __init__(self, content):
         """Initialize with the raw string content."""
         self.raw_string = str(content)
+    
+    def __getattr__(self, name):
+        """Return None for any missing attribute instead of raising AttributeError."""
+        return None
     
     def render(self, **kwargs):
         """Render the string as a Jinja template."""
@@ -87,7 +181,7 @@ class Config(dict):
 
     def _convert_to_config(self):
         """Recursively convert nested dictionaries to Config objects."""
-        for key, value in list(self.items()):  # Use list to avoid modifying during iteration
+        for key, value in list(dict.items(self)):  # Use dict.items directly to avoid attribute conflicts
             self[key] = self._convert_value(value, key)
 
     def _convert_value(self, value, key=None):
@@ -95,9 +189,12 @@ class Config(dict):
         if isinstance(value, dict) and not isinstance(value, Config):
             return Config(value, yaml_path=None, parent=self, parent_key=key)
         elif isinstance(value, list):
-            return [self._convert_value(item) for item in value]
-        elif isinstance(value, (int, float, bool, type(None))):
-            return value
+            converted_items = [self._convert_value(item) for item in value]
+            return SafeList(converted_items, parent_config=self)
+        elif value is None:
+            return None  # Keep None as None for proper identity comparisons
+        elif isinstance(value, (int, float, bool)):
+            return SafeAttributeAccess(value)
         elif isinstance(value, str):
             return StringTemplate(value)
         elif isinstance(value, Config):
@@ -106,28 +203,52 @@ class Config(dict):
             value._parent_key = key
             return value
         else:
-            return value
+            return SafeAttributeAccess(value)
 
-    def __getattr__(self, key):
+    def __getattribute__(self, key):
         """Get an attribute from the Config using dot notation."""
-        # Ignore special methods
-        if key.startswith('__') and key.endswith('__'):
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{key}'")
+        # Allow access to special methods and private attributes
+        if key.startswith('_') or key.startswith('__'):
+            return super().__getattribute__(key)
+        
+        # Allow access to essential dict methods that shouldn't be overridden
+        if key in ('keys', 'values', 'get', 'pop', 'popitem', 'setdefault', 'update', 'clear', 'copy', 'items'):
+            # But first check if it's also a key in the dictionary
+            try:
+                if dict.__contains__(self, key):
+                    return dict.__getitem__(self, key)
+            except:
+                pass
+            return super().__getattribute__(key)
+        
+        # For all other attributes, check if it's a key in the dictionary first
         try:
-            return self[key]
-        except KeyError:
+            if dict.__contains__(self, key):
+                return dict.__getitem__(self, key)
+        except:
+            pass
+        
+        # If not found as a dictionary key, try normal attribute access
+        try:
+            return super().__getattribute__(key)
+        except AttributeError:
             return None
 
     def _process_value(self, value, key=None):
         """Process a value to ensure it's in the correct format for Config storage."""
         if isinstance(value, dict) and not isinstance(value, Config):
             return Config(value, yaml_path=None, parent=self, parent_key=key)
-        elif isinstance(value, list):
-            return [self._process_value(item) for item in value]
+        elif isinstance(value, list) and not isinstance(value, SafeList):
+            processed_items = [self._process_value(item) for item in value]
+            return SafeList(processed_items, parent_config=self)
         elif isinstance(value, str) and not isinstance(value, StringTemplate):
             return StringTemplate(value)
         elif isinstance(value, (int, float)) and key is not None and key in self and isinstance(self[key], StringTemplate):
             return StringTemplate(str(value))
+        elif value is None:
+            return None  # Keep None as None
+        elif isinstance(value, (int, float, bool)) and not isinstance(value, SafeAttributeAccess):
+            return SafeAttributeAccess(value)
         return value
 
     def __setitem__(self, key, value):
@@ -163,15 +284,6 @@ class Config(dict):
         """Create a deep copy of the Config."""
         return Config(copy.deepcopy(dict(self), memo))
     
-    
-    def append(self, item):
-        """Append an item to a list-like Config object."""
-        # Convert the item to a Config object if it's a dict
-        if isinstance(item, dict):
-            item = Config(item, parent=self)
-        # Use the list append method directly
-        list.append(self, item)
-
     def _to_serializable(self):
         """Convert the Config to a serializable dictionary."""
         def _serialize(v):
@@ -179,7 +291,9 @@ class Config(dict):
                 return v._to_serializable()
             elif isinstance(v, StringTemplate):
                 return v.raw_string
-            elif isinstance(v, list):
+            elif isinstance(v, SafeAttributeAccess):
+                return v._wrapped_object
+            elif isinstance(v, (list, SafeList)):
                 return [_serialize(item) for item in v]
             elif isinstance(v, dict):
                 return {k: _serialize(val) for k, val in v.items()}
@@ -192,13 +306,56 @@ class Config(dict):
         result = {}
         
         # Process each key-value pair in the Config
-        for k, v in list(self.items()):
+        for k, v in list(dict.items(self)):
             if k.startswith('_'):
                 continue
             # Convert all other values to serializable format
             result[k] = _serialize(v)
             
         return result
+
+
+class SafeList(list):
+    """A list that wraps assigned primitive values with SafeAttributeAccess."""
+    
+    def __init__(self, items=None, parent_config=None):
+        items = items or []
+        self._parent_config = parent_config
+        super().__init__(items)
+    
+    def __setitem__(self, index, value):
+        """Wrap primitive values with SafeAttributeAccess when assigning to list."""
+        processed_value = self._process_value(value)
+        super().__setitem__(index, processed_value)
+    
+    def append(self, value):
+        """Wrap primitive values with SafeAttributeAccess when appending to list."""
+        processed_value = self._process_value(value)
+        super().append(processed_value)
+    
+    def insert(self, index, value):
+        """Wrap primitive values with SafeAttributeAccess when inserting into list."""
+        processed_value = self._process_value(value)
+        super().insert(index, processed_value)
+    
+    def extend(self, values):
+        """Wrap primitive values with SafeAttributeAccess when extending list."""
+        processed_values = [self._process_value(value) for value in values]
+        super().extend(processed_values)
+    
+    def _process_value(self, value):
+        """Process a value to ensure it's properly wrapped."""
+        if isinstance(value, dict) and not isinstance(value, Config):
+            return Config(value, yaml_path=None, parent=self._parent_config)
+        elif isinstance(value, list) and not isinstance(value, SafeList):
+            return SafeList(value, parent_config=self._parent_config)
+        elif isinstance(value, str) and not isinstance(value, StringTemplate):
+            return StringTemplate(value)
+        elif value is None:
+            return None  # Keep None as None
+        elif isinstance(value, (int, float, bool)) and not isinstance(value, SafeAttributeAccess):
+            return SafeAttributeAccess(value)
+        return value
 
 
 def load(file_path) -> Config:
